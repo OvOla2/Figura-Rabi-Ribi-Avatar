@@ -1,21 +1,36 @@
-MIT License
+许可协议
+1. 二次创作规约
+本作品（Figura-Rabi-Ribi-Avatar）是基于库斯特（CreSpirit）拥有版权的《Rabi-Ribi》的二次创作内容。
+- 官方规约：使用者必须遵守《Rabi-Ribi》官方的二次创作规约。
+- IP 归属：角色设计、视觉资产及相关知识产权均归库斯特（CreSpirit）所有。严禁任何违反官方规约的使用行为。
 
-Copyright (c) 2026 OvOla2
+2. 权利归属与适用范围
+本项目中，官方知识产权与独立创作部分的区分如下：
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+OvOla2（作者）权利：
+- 由OvOla2独立创作的3D模型数据（网格、贴图）。
+- 由OvOla2创作的Lua脚本。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+官方权利：
+- Rabi-Ribi 角色的视觉设计、形象及品牌。
+- 严禁将本项目整体用于商业用途或销售。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. 禁止事项
+为保护创作社区，以下行为被严格禁止：
+- 禁止抄袭与冒名：不得声称本作品（或其修改版本）为自己的原创。在分享或分发时，请注明原作者（OvOla2）。
+- 违反官方规约：任何损害原版权方声誉的使用行为。
+
+4. 免责声明
+本作品为非官方粉丝项目，与库斯特（CreSpirit）无关，亦未获得其背书。
+本软件按"原样"提供，不提供任何形式的担保。作者（OvOla2）对因使用本项目而产生的任何问题或损害不承担责任。
+作者保留在官方版权方要求时立即下架本仓库的权利。
+
+5. 软件许可协议
+Lua 脚本：
+由OvOla2创作的Lua脚本源码，使用MIT协议授权。
+
+模型数据：
+由OvOla2独立创作的3D模型数据（网格、贴图），采用 CC BY-SA 4.0 协议授权。
+
+第三方代码库与资源：
+- Fidget 物理库：此库发布时未附带明确许可证，推定其所有权利由原作者保留。
