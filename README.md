@@ -1,3 +1,3 @@
 # Figura-Rabi-Ribi-Avatar
 
-由于[Fidget项目](https://github.com/SOOMUCHLAG/Fidget.)未提供许可证文件，因此你必须手动下载并添加进Avatar文件中
+使用第三方物理库Fidget. 所属权归原作者[SOOMUCHLAG](https://github.com/SOOMUCHLAG)所有
