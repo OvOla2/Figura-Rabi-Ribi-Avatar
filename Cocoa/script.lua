@@ -8,6 +8,90 @@ vanilla_model.CAPE:setVisible(false)
 vanilla_model.ELYTRA:setVisible(false)
 
 -- ===================================================
+-- 粒子生成抽象层（兼容 Minecraft 1.21.4 与 26.3+）
+-- ===================================================
+-- 说明：
+--   * 1.21.9 / 26.x 起，带颜色选项的粒子（如 flash、dust 等）
+--     必须在名称字符串中携带 SNBT 选项，否则会抛出
+--     "No key color in MapLike[{}]" 之类的解析错误。
+--   * 所有粒子生成统一走 spawnParticle，内部用 pcall 包裹，
+--     单个粒子失败不会中断整个脚本。
+-- ===================================================
+
+local particleSpawner = {}
+
+-- 解析 Minecraft 版本（失败时按旧版处理，保证抽象层自身不崩）
+local mcVersion = ""
+pcall(function()
+    mcVersion = client.getVersion() or ""
+end)
+
+local versionParts = {}
+for num in mcVersion:gmatch("%d+") do
+    versionParts[#versionParts + 1] = tonumber(num)
+end
+local mcMajor = versionParts[1] or 0
+local mcMinor = versionParts[2] or 0
+local mcPatch = versionParts[3] or 0
+
+-- 1.21.9 / 26.x 起，彩色粒子需要 SNBT color 选项
+local needsParticleOptions = false
+if mcMajor > 1 then
+    needsParticleOptions = true
+elseif mcMajor == 1 then
+    if mcMinor > 21 or (mcMinor == 21 and mcPatch >= 9) then
+        needsParticleOptions = true
+    end
+end
+
+-- 哑元粒子对象：生成失败时返回它，保证链式调用（:setScale 等）不会报错
+local dummyParticle = {}
+function dummyParticle:setScale()    return self end
+function dummyParticle:setLifetime() return self end
+function dummyParticle:setColor()    return self end
+function dummyParticle:setOpacity()  return self end
+
+-- 粒子名称/选项的版本转换
+local function normalizeParticleId(name)
+    -- flash：新版需要显式颜色
+    if name == "minecraft:flash" or name == "flash" then
+        if needsParticleOptions then
+            return "minecraft:flash{color:[1.0,1.0,1.0,1.0]}"
+        end
+        return "minecraft:flash"
+    end
+
+    -- dust：旧空格格式 -> 新版 SNBT
+    if needsParticleOptions and name:find("^dust%s") then
+        local r, g, b, a = name:match("^dust%s+([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)")
+        if r then
+            r, g, b, a = tonumber(r), tonumber(g), tonumber(b), tonumber(a)
+            return string.format(
+                "minecraft:dust{color:[%.2f,%.2f,%.2f,%.2f],scale:1.0}",
+                r, g, b, a
+            )
+        end
+    end
+
+    return name
+end
+
+-- 统一粒子生成入口
+local function spawnParticle(name, pos, ...)
+local actualName = normalizeParticleId(name)
+-- 注意：闭包必须声明为 vararg 才能使用 ...
+local ok, particle = pcall(function(...)
+return particles:newParticle(actualName, pos, ...)
+end, ...)
+if ok and particle then
+    return particle
+    end
+    -- 可选调试输出：
+    -- print("[Particle] 无法生成: " .. tostring(actualName) .. " | " .. tostring(particle))
+    return dummyParticle
+end
+
+-- ===================================================
 -- 炸弹系统
 -- ===================================================
 
@@ -29,14 +113,14 @@ end
 local BombConfig = {}
 
 local bomb1Explosion = function(pos, params)
-    particles:newParticle("minecraft:explosion_emitter", pos):setScale(3)
-    particles:newParticle("minecraft:flash", pos):setScale(2)
+    spawnParticle("minecraft:explosion_emitter", pos):setScale(3)
+    spawnParticle("minecraft:flash", pos):setScale(2)
     sounds:playSound("minecraft:entity.generic.explode", pos, 1.0, 1.0)
     for _ = 1, 40 do
         local offset = vectors.vec3(
             (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
         ):normalize():scale(math.random()*3)
-        particles:newParticle("minecraft:smoke", pos+offset):setScale(1.5):setLifetime(20)
+        spawnParticle("minecraft:smoke", pos+offset):setScale(1.5):setLifetime(20)
     end
 end
 
@@ -52,20 +136,20 @@ BombConfig.TYPES = {
         modelPath = {"Bomb", "World", "Bomb2"},
         physicsPreset = "HEAVY",
         explosion = function(pos, params)
-            particles:newParticle("minecraft:explosion_emitter", pos):setScale(5)
-            particles:newParticle("minecraft:flash", pos):setScale(3)
+            spawnParticle("minecraft:explosion_emitter", pos):setScale(5)
+            spawnParticle("minecraft:flash", pos):setScale(3)
             sounds:playSound("minecraft:entity.generic.explode", pos, 1.2, 1.0)
             for _ = 1, 60 do
                 local offset = vectors.vec3(
                     (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
                 ):normalize():scale(math.random()*5)
-                particles:newParticle("minecraft:smoke", pos+offset):setScale(2):setLifetime(20)
+                spawnParticle("minecraft:smoke", pos+offset):setScale(2):setLifetime(20)
             end
             for _ = 1, 30 do
                 local offset = vectors.vec3(
                     (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
                 ):normalize():scale(math.random()*4)
-                particles:newParticle("minecraft:flame", pos+offset):setScale(1):setLifetime(15)
+                spawnParticle("minecraft:flame", pos+offset):setScale(1):setLifetime(15)
             end
 
             local innerTemplate = models.Bomb.World.PillarInner
@@ -107,20 +191,20 @@ BombConfig.TYPES = {
         modelPath = {"Bomb", "World", "Bomb3"},
         physicsPreset = "LIGHT",
         explosion = function(pos, params)
-            particles:newParticle("minecraft:explosion_emitter", pos):setScale(1.5)
-            particles:newParticle("minecraft:flash", pos):setScale(1)
+            spawnParticle("minecraft:explosion_emitter", pos):setScale(1.5)
+            spawnParticle("minecraft:flash", pos):setScale(1)
             sounds:playSound("minecraft:entity.generic.explode", pos, 0.6, 0.7)
             for _ = 1, 15 do
                 local offset = vectors.vec3(
                     (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
                 ):normalize():scale(math.random()*1.5)
-                particles:newParticle("minecraft:smoke", pos+offset):setScale(1):setLifetime(10)
+                spawnParticle("minecraft:smoke", pos+offset):setScale(1):setLifetime(10)
             end
             for _ = 1, 20 do
                 local offset = vectors.vec3(
                     (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
                 ):normalize():scale(math.random()*1.5)
-                particles:newParticle("minecraft:soul_fire_flame", pos+offset):setScale(0.8):setLifetime(10)
+                spawnParticle("minecraft:soul_fire_flame", pos+offset):setScale(0.8):setLifetime(10)
             end
             if params.bulletManager then
                 params.bulletManager:fireVolley(pos)
@@ -157,15 +241,15 @@ BombConfig.TYPES = {
         physicsPreset = "FLYING",
         -- 球形灵魂火爆炸
         explosion = function(pos, params)
-            particles:newParticle("minecraft:explosion_emitter", pos):setScale(4)
-            particles:newParticle("minecraft:flash", pos):setScale(3)
+            spawnParticle("minecraft:explosion_emitter", pos):setScale(4)
+            spawnParticle("minecraft:flash", pos):setScale(3)
             sounds:playSound("minecraft:entity.generic.explode", pos, 1.5, 0.8)
             -- 生成 200 个灵魂火粒子，半径 3 格
             for _ = 1, 200 do
                 local offset = vectors.vec3(
                     (math.random()*2-1), (math.random()*2-1), (math.random()*2-1)
                 ):normalized():scale(math.random() * 3)
-                particles:newParticle("minecraft:soul_fire_flame", pos + offset)
+                spawnParticle("minecraft:soul_fire_flame", pos + offset)
                     :setScale(1.2)
                     :setLifetime(25)
             end
@@ -274,10 +358,10 @@ function BulletManager:update()
             b.lifetime = b.lifetime - 1
             local bs = world.getBlockState(b.pos)
             if bs:hasCollision() then
-                particles:newParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
+                spawnParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
                 b.active = false
             elseif b.lifetime <= 0 then
-                particles:newParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
+                spawnParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
                 b.active = false
             end
         end
@@ -376,7 +460,7 @@ function BombManager:createBomb(startPos, direction)
     local vel = direction:copy():normalize():scale(preset.launchSpeed)
 
     sounds:playSound("minecraft:entity.firework_rocket.launch", startPos, 0.8, 1.2)
-    particles:newParticle("minecraft:smoke", startPos):setScale(0.5)
+    spawnParticle("minecraft:smoke", startPos):setScale(0.5)
 
     local rigidbody = Fidget.rigidbodies.createRigidbody({
         pos = startPos,
@@ -467,13 +551,13 @@ function BombManager:updateBomb4Bullets()
             b.particleTimer = b.particleTimer + 1
             if b.particleTimer >= 8 then
                 b.particleTimer = 0
-                particles:newParticle("dust 0.2 0.6 1 1", b.pos):setScale(0.8):setLifetime(15)
+                spawnParticle("dust 0.2 0.6 1 1", b.pos):setScale(0.8):setLifetime(15)
             end
             if isSolidBlock(b.pos) then
                 for _=1,20 do
                     local t = math.random()*2*math.pi; local p = math.acos(2*math.random()-1)
                     local x,y,z = 0.5*math.sin(p)*math.cos(t), 0.5*math.sin(p)*math.sin(t), 0.5*math.cos(p)
-                    particles:newParticle("dust 0.2 0.6 1 1", b.pos+vec(x,y,z)):setScale(0.5):setLifetime(20)
+                    spawnParticle("dust 0.2 0.6 1 1", b.pos+vec(x,y,z)):setScale(0.5):setLifetime(20)
                 end
                 sounds:playSound("minecraft:entity.firework_rocket.blast", b.pos, 0.5, 1.5)
                 b.active = false
@@ -525,7 +609,7 @@ function BombManager:updateBomb5Bullets()
             b.model:setPos(b.pos*16)
             b.lifetime = b.lifetime - 1
             if isSolidBlock(b.pos) or b.lifetime <= 0 then
-                particles:newParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
+                spawnParticle("minecraft:soul_fire_flame", b.pos):setScale(0.8)
                 b.active = false
             end
         end
@@ -552,7 +636,7 @@ function BombManager:updateBomb6Bullets3()
             b.model:setPos(b.pos*16)
             b.lifetime = b.lifetime - 1
             if isSolidBlock(b.pos) or b.lifetime <= 0 then
-                particles:newParticle("minecraft:flame", b.pos):setScale(0.8)
+                spawnParticle("minecraft:flame", b.pos):setScale(0.8)
                 b.active = false
             end
         end
@@ -582,7 +666,7 @@ function BombManager:updateBomb6Bullets2()
             b.model:setPos(b.pos*16)
             b.lifetime = b.lifetime - 1
             if isSolidBlock(b.pos) or b.lifetime <= 0 then
-                particles:newParticle("minecraft:happy_villager", b.pos):setScale(0.8)
+                spawnParticle("minecraft:happy_villager", b.pos):setScale(0.8)
                 b.active = false
             end
         end
@@ -681,7 +765,7 @@ function BombManager:updateBomb7Bullets()
             b.lifetime = b.lifetime - 1
 
             if isSolidBlock(b.pos) or b.lifetime <= 0 then
-                particles:newParticle("minecraft:flame", b.pos):setScale(0.8)
+                spawnParticle("minecraft:flame", b.pos):setScale(0.8)
                 b.active = false
             end
         end
@@ -706,7 +790,11 @@ function BombManager:explodeBomb(bomb, bulletManager)
     local pos = bomb.rigidbody and bomb.rigidbody.pos or bomb.pos
     local bombType = self.config.TYPES[bomb.typeIndex]
     if bombType and bombType.explosion then
-        bombType.explosion(pos, { bulletManager = bulletManager })
+        -- pcall 兜底：单次爆炸效果异常不影响主循环
+        local ok, err = pcall(bombType.explosion, pos, { bulletManager = bulletManager })
+        if not ok then
+            -- print("[Bomb] 爆炸效果异常: " .. tostring(err))
+        end
     end
 end
 
