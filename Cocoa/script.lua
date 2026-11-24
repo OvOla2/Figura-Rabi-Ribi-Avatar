@@ -589,16 +589,15 @@ function BombManager:updateBomb4Bullets()
                 b.particleTimer = 0
                 spawnParticle("dust 0.2 0.6 1 1", b.pos):setScale(0.8):setLifetime(15)
             end
-            if isSolidBlock(b.pos) then
+            -- 撞方块或寿命耗尽都走同一个爆炸：超时只在永远落不到地面的情况下触发，
+            -- 不应该静默消失（视觉上要像一次撞击/爆炸）
+            if isSolidBlock(b.pos) or b.lifetime <= 0 then
                 for _=1,20 do
                     local t = math.random()*2*math.pi; local p = math.acos(2*math.random()-1)
                     local x,y,z = 0.5*math.sin(p)*math.cos(t), 0.5*math.sin(p)*math.sin(t), 0.5*math.cos(p)
                     spawnParticle("dust 0.2 0.6 1 1", b.pos+vec(x,y,z)):setScale(0.5):setLifetime(20)
                 end
                 sounds:playSound("minecraft:entity.firework_rocket.blast", b.pos, 0.5, 1.5)
-                b.active = false
-            elseif b.lifetime <= 0 then
-                -- 超时静默移除：只在永远落不到地面的情况下触发
                 b.active = false
             end
         end
