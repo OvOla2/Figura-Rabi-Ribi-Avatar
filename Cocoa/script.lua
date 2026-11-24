@@ -425,6 +425,8 @@ function BombManager:init()
     for i, bt in ipairs(self.config.TYPES) do
         local mdl = models
         for _, part in ipairs(bt.modelPath) do
+            -- 模型缺失时继续取子节点会索引 nil；提前退出，让下面的 if 走警告分支
+            if not mdl then break end
             mdl = mdl[part]
         end
         if mdl then
@@ -435,12 +437,14 @@ function BombManager:init()
         end
     end
 
-    -- 隐藏光柱模板
-    if models.Bomb.World.PillarInner then
-        models.Bomb.World.PillarInner:setVisible(false)
-    end
-    if models.Bomb.World.PillarOuter then
-        models.Bomb.World.PillarOuter:setVisible(false)
+    -- 隐藏光柱模板（Bomb 模型缺失时不能在这里抛错，否则 init 中断、整个脚本都起不来）
+    if models.Bomb and models.Bomb.World then
+        if models.Bomb.World.PillarInner then
+            models.Bomb.World.PillarInner:setVisible(false)
+        end
+        if models.Bomb.World.PillarOuter then
+            models.Bomb.World.PillarOuter:setVisible(false)
+        end
     end
 
     -- 飞行动画
@@ -478,6 +482,9 @@ end
 function BombManager:createBomb(startPos, direction)
     local bombType = self.config.TYPES[self.currentType]
     if not self.models[self.currentType] then return nil end
+    -- Fidget 只在 MAX 权限下加载 rigidbodies；非 MAX 观者端这里不判空会报错，
+    -- 而 Figura 的未捕获错误会停掉整个脚本，所以直接当作“无法生成”跳过
+    if not Fidget.rigidbodies then return nil end
 
     local preset = self.presets[bombType.physicsPreset] or self.presets.DEFAULT
     local vel = direction:copy():normalize():scale(preset.launchSpeed)
