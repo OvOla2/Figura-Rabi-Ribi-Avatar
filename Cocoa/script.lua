@@ -14,8 +14,8 @@ vanilla_model.ELYTRA:setVisible(false)
 --   * 1.21.9 / 26.x 起，带颜色选项的粒子（如 flash、dust 等）
 --     必须在名称字符串中携带 SNBT 选项，否则会抛出
 --     "No key color in MapLike[{}]" 之类的解析错误。
---   * 所有粒子生成统一走 spawnParticle，内部用 pcall 包裹，
---     单个粒子失败不会中断整个脚本。
+--   * 所有粒子生成统一走 spawnParticle，名字归一化和 newParticle 都在 pcall 内，
+--     单个粒子失败不会中断整个脚本；首次失败会打印一次提示。
 -- ===================================================
 
 local particleSpawner = {}
@@ -23,7 +23,9 @@ local particleSpawner = {}
 -- 解析 Minecraft 版本（失败时按旧版处理，保证抽象层自身不崩）
 local mcVersion = ""
 pcall(function()
-    mcVersion = client.getVersion() or ""
+    local v = client.getVersion()
+    -- 版本号必须是字符串：非字符串会让下面的 gmatch 在加载期抛错，整个脚本都起不来
+    if v ~= nil then mcVersion = tostring(v) end
 end)
 
 local versionParts = {}
@@ -53,6 +55,9 @@ function dummyParticle:setOpacity()  return self end
 
 -- 粒子名称/选项的版本转换
 local function normalizeParticleId(name)
+    -- 非字符串（调用方写错）原样返回，让它在外层 pcall 里失败，不在这里抛错
+    if type(name) ~= "string" then return name end
+
     -- flash：新版需要显式颜色
     if name == "minecraft:flash" or name == "flash" then
         if needsParticleOptions then
@@ -61,15 +66,21 @@ local function normalizeParticleId(name)
         return "minecraft:flash"
     end
 
-    -- dust：旧空格格式 -> 新版 SNBT
-    if needsParticleOptions and name:find("^dust%s") then
-        local r, g, b, a = name:match("^dust%s+([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)")
-        if r then
-            r, g, b, a = tonumber(r), tonumber(g), tonumber(b), tonumber(a)
-            return string.format(
-                "minecraft:dust{color:[%.2f,%.2f,%.2f,%.2f],scale:1.0}",
-                r, g, b, a
-            )
+    -- dust：旧空格格式 -> 新版 SNBT；带不带 minecraft: 前缀都接受
+    if needsParticleOptions then
+        local body = name:match("^dust%s+(.*)$") or name:match("^minecraft:dust%s+(.*)$")
+        if body then
+            local r, g, b, a = body:match("^([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)%s+([%d%.]+)")
+            if r then
+                r, g, b, a = tonumber(r), tonumber(g), tonumber(b), tonumber(a)
+                -- 解析失败就原样返回，交给外层 pcall 决定是否降级，避免在兼容层里抛错
+                if r and g and b and a then
+                    return string.format(
+                        "minecraft:dust{color:[%.2f,%.2f,%.2f,%.2f],scale:1.0}",
+                        r, g, b, a
+                    )
+                end
+            end
         end
     end
 
@@ -77,17 +88,25 @@ local function normalizeParticleId(name)
 end
 
 -- 统一粒子生成入口
+local particleWarned = false
+
+local function warnParticleFailure(name, err)
+    -- 只提示一次：兼容层失效通常是一整类粒子都失效，逐次打印会把日志刷爆
+    if particleWarned then return end
+    particleWarned = true
+    print("[Cocoa] 粒子生成失败（仅提示一次）: " .. tostring(name)
+        .. " | " .. tostring(err) .. " | MC " .. tostring(mcVersion))
+end
+
 local function spawnParticle(name, pos, ...)
-local actualName = normalizeParticleId(name)
--- 注意：闭包必须声明为 vararg 才能使用 ...
-local ok, particle = pcall(function(...)
-return particles:newParticle(actualName, pos, ...)
-end, ...)
-if ok and particle then
-    return particle
+    -- 名字归一化也放进 pcall：坏名字或版本差异不能让 TICK 抛错停掉整个脚本
+    local ok, particle = pcall(function(...)
+        return particles:newParticle(normalizeParticleId(name), pos, ...)
+    end, ...)
+    if ok and particle then
+        return particle
     end
-    -- 可选调试输出：
-    -- print("[Particle] 无法生成: " .. tostring(actualName) .. " | " .. tostring(particle))
+    warnParticleFailure(name, particle)
     return dummyParticle
 end
 
