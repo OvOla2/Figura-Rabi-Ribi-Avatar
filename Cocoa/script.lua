@@ -759,6 +759,10 @@ function BombManager:createBomb7Bullet(pos, dir, leader)
     return b
 end
 
+-- 方向常量：crossed 不会修改它们，避免领弹每 tick 重新创建
+local BOMB7_UP = vectors.vec3(0, 1, 0)
+local BOMB7_RIGHT = vectors.vec3(1, 0, 0)
+
 -- Bomb7 每 tick 的方块查询去重：同一条链的 5 节经常在同一方块里，
 -- 缓存上一次查询的方块坐标和结果，避免对同一方块重复调用 getBlockState/hasCollision。
 local b7CacheX, b7CacheY, b7CacheZ, b7CacheSolid
@@ -791,15 +795,16 @@ function BombManager:updateBomb7Bullets()
                     b.pos = b.leader.pos - leadVel:normalized() * b.spacing
                     b.vel = leadVel
                 else
-                    b.pos = b.leader.pos
+                    -- 不能共享 b.leader.pos：下面会原地修改 b.pos
+                    b.pos.x, b.pos.y, b.pos.z = b.leader.pos.x, b.leader.pos.y, b.leader.pos.z
                     b.vel = vec(0, 0, 0)
                 end
             else
                 if b.vel:length() > 0.001 then
                     local vDir = b.vel:normalized()
-                    local axis = vDir:crossed(vec(0, 1, 0))
+                    local axis = vDir:crossed(BOMB7_UP)
                     if axis:length() < 0.1 then
-                        axis = vDir:crossed(vec(1, 0, 0))
+                        axis = vDir:crossed(BOMB7_RIGHT)
                     end
                     local perpDir = axis:normalized()
                     b.vel = b.vel + perpDir * b.perpAccel * dt
@@ -807,8 +812,12 @@ function BombManager:updateBomb7Bullets()
                 end
             end
 
-            b.pos = b.pos + b.vel * dt
-            b.model:setPos(b.pos * 16)
+            -- b.pos 在本 tick 已是本子弹自己的向量（零速度分支也改为分量拷贝），可以原地加
+            b.pos.x = b.pos.x + b.vel.x * dt
+            b.pos.y = b.pos.y + b.vel.y * dt
+            b.pos.z = b.pos.z + b.vel.z * dt
+            -- setPos 有 (x,y,z) 重载，省掉 pos*16 的临时向量
+            b.model:setPos(b.pos.x * 16, b.pos.y * 16, b.pos.z * 16)
 
             if b.vel:length() > 0.01 then
                 local lookDir = b.vel:normalized()
