@@ -759,7 +759,23 @@ function BombManager:createBomb7Bullet(pos, dir, leader)
     return b
 end
 
+-- Bomb7 每 tick 的方块查询去重：同一条链的 5 节经常在同一方块里，
+-- 缓存上一次查询的方块坐标和结果，避免对同一方块重复调用 getBlockState/hasCollision。
+local b7CacheX, b7CacheY, b7CacheZ, b7CacheSolid
+
+local function isSolidBlockBomb7(pos)
+    local x, y, z = math.floor(pos.x), math.floor(pos.y), math.floor(pos.z)
+    if x == b7CacheX and y == b7CacheY and z == b7CacheZ then
+        return b7CacheSolid
+    end
+    b7CacheSolid = isSolidBlock(pos)
+    b7CacheX, b7CacheY, b7CacheZ = x, y, z
+    return b7CacheSolid
+end
+
 function BombManager:updateBomb7Bullets()
+    -- 每 tick 清空：同一 tick 内方块状态不会变，复用结果是安全的
+    b7CacheX, b7CacheY, b7CacheZ = nil, nil, nil
     local dt = 1 / 20
     for i = #self.bomb7Bullets, 1, -1 do
         local b = self.bomb7Bullets[i]
@@ -803,7 +819,7 @@ function BombManager:updateBomb7Bullets()
 
             b.lifetime = b.lifetime - 1
 
-            if isSolidBlock(b.pos) or b.lifetime <= 0 then
+            if isSolidBlockBomb7(b.pos) or b.lifetime <= 0 then
                 spawnParticle("minecraft:flame", b.pos):setScale(0.8)
                 b.active = false
             end
