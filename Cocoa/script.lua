@@ -557,6 +557,10 @@ function BombManager:createFlyingBomb(startPos)
 end
 
 -- ========== Bomb4 专属子弹 ==========
+-- Bomb4 子弹只有撞方块才会移除；在虚空/未加载区块上空会永远下落。
+-- 这里加一个寿命兜底，正常地形仍会提前撞地，不会看到差别。
+local BOMB4_BULLET_LIFETIME = 400
+
 function BombManager:createBomb4Bullet(pos)
     local bt = models.Bomb.World.Bullet4
     if not bt then return end
@@ -565,7 +569,8 @@ function BombManager:createBomb4Bullet(pos)
     models.Bomb.World:addChild(m)
     local b = {
         model = m, pos = pos:copy(), vel = vec(0,-2,0),
-        active = true, rotationAngle = 0, particleTimer = 0
+        active = true, rotationAngle = 0, particleTimer = 0,
+        lifetime = BOMB4_BULLET_LIFETIME
     }
     table.insert(self.bomb4Bullets, b)
 end
@@ -578,6 +583,7 @@ function BombManager:updateBomb4Bullets()
             b.pos = b.pos + b.vel * 0.05
             b.rotationAngle = b.rotationAngle + (math.pi/10)
             b.model:setPos(b.pos*16):setRot(0,0,math.deg(b.rotationAngle))
+            b.lifetime = b.lifetime - 1
             b.particleTimer = b.particleTimer + 1
             if b.particleTimer >= 8 then
                 b.particleTimer = 0
@@ -590,6 +596,9 @@ function BombManager:updateBomb4Bullets()
                     spawnParticle("dust 0.2 0.6 1 1", b.pos+vec(x,y,z)):setScale(0.5):setLifetime(20)
                 end
                 sounds:playSound("minecraft:entity.firework_rocket.blast", b.pos, 0.5, 1.5)
+                b.active = false
+            elseif b.lifetime <= 0 then
+                -- 超时静默移除：只在永远落不到地面的情况下触发
                 b.active = false
             end
         end
