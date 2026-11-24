@@ -155,13 +155,14 @@ BombConfig.TYPES = {
             local innerTemplate = models.Bomb.World.PillarInner
             local outerTemplate = models.Bomb.World.PillarOuter
             if innerTemplate and outerTemplate then
+                -- 两根光柱都配置完再挂到场景：setter 在版本差异下抛错时不会留下
+                -- “已添加但没有清理闭包”的孤儿（4096 倍光柱会一直留在世界里）
                 local inner = innerTemplate:copy("pillar_inner_" .. math.random(100000,999999))
                     :setParentType("WORLD")
                     :setVisible(true)
                     :setPrimaryRenderType("EMISSIVE_SOLID")
                     :setPos(pos * 16)
                     :setScale(20, 4096, 20)
-                models.Bomb.World:addChild(inner)
 
                 local outer = outerTemplate:copy("pillar_outer_" .. math.random(100000,999999))
                     :setParentType("WORLD")
@@ -171,6 +172,8 @@ BombConfig.TYPES = {
                     :setOpacity(0.4)
                     :setPos(pos * 16)
                     :setScale(25, 4096, 25)
+
+                models.Bomb.World:addChild(inner)
                 models.Bomb.World:addChild(outer)
 
                 local lifetime = 60
@@ -335,10 +338,11 @@ end
 function BulletManager:createBullet(pos, dir)
     if not self.model or not self.root then return end
     local copyModel = self.model:copy("bullet2_" .. math.random(100000,999999))
-    self.root:addChild(copyModel)
+    -- 先配置再挂到场景：setter 抛错时不会留下已添加、未入表的孤儿模型
     copyModel:setVisible(true)
     copyModel:setPos(pos * 16)
     copyModel:setPrimaryRenderType("CUTOUT_EMISSIVE_SOLID")
+    self.root:addChild(copyModel)
     local bullet = {
         model = copyModel,
         pos = pos:copy(),
@@ -584,12 +588,13 @@ function BombManager:createBomb5Bullet(pos, dir)
     if not bt then return end
     local m = bt:copy("bullet1_"..math.random(100000,999999))
     m:setParentType("WORLD"):setVisible(true):setPrimaryRenderType("EMISSIVE_SOLID")
-    models.Bomb.World:addChild(m)
     local nd = dir:normalized()
     local look = -nd
     local yaw = math.atan2(look.x, look.z)
     local pitch = -math.asin(look.y)
+    -- setRot 也是 setter，放在 addChild 之前，失败时不会留下孤儿模型
     m:setRot(math.deg(pitch), math.deg(yaw), 0)
+    models.Bomb.World:addChild(m)
     local b = { model=m, pos=pos:copy(), vel=nd:scale(3), active=true, lifetime=160 }
     table.insert(self.bomb5Bullets, b)
 end
